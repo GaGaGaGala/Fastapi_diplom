@@ -1,16 +1,24 @@
-from fastapi import FastAPI
-from sqlalchemy import select, create_engine, Column, Integer, String
+from fastapi import FastAPI, Query, HTTPException
+from sqlalchemy import create_engine, Column, Integer, String, select
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Optional
 import json
 import requests
 from PIL import Image, UnidentifiedImageError
 from io import BytesIO
-from typing import List, Optional
-
-from utils import json_to_dict_list
 
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 Base = declarative_base()
 
@@ -32,14 +40,11 @@ def optimize_image(image_url):
     try:
         response = requests.get(image_url)
         image = Image.open(BytesIO(response.content))
-        # Оптимизация изображения здесь, например, изменение размера, компрессия и т.д.
+        # Optimize image here, e.g., resizing, compression, etc.
         return image_url
     except UnidentifiedImageError as e:
         print(f"Error: Cannot identify image file at {image_url}. {e}")
         return None
-
-
-from sqlalchemy import select
 
 @app.on_event("startup")
 async def load_books():
@@ -51,7 +56,6 @@ async def load_books():
         book_id = book_data['id']
         optimized_image_url = optimize_image(book_data['фотография'])
 
-        # Проверяем, существует ли уже книга с таким id
         existing_book = session.execute(select(Book).where(Book.id == book_id)).first()
         if not existing_book:
             book = Book(
@@ -67,39 +71,61 @@ async def load_books():
 
 @app.get("/")
 def home_page():
-    return {"message": "Приветствую вас в данном Fast API приложении",
-            "message_1": "Полезные страницы:",
-            "message_2": "http://127.0.0.1:8001/books",
-            "message_3": "http://127.0.0.1:8001/docs",
-            "message_4": "http://127.0.0.1:8001/book/{id}"
-            }
+    return {
+        "message": "Приветствую вас в данном Fast API приложении",
+        "message_1": "Полезные страницы:",
+        "message_2": "http://127.0.0.1:8001/books",
+        "message_3": "http://127.0.0.1:8001/docs",
+        "message_4": "http://127.0.0.1:8001/book/{id}"
+    }
 
 @app.get("/books")
 async def read_books():
     session = SessionLocal()
     books = session.query(Book).all()
-    return [{"id": book.id,
-             "title": book.title,
-             "author": book.author,
-             "year": book.year,
-             "description": book.description,
-             "image_url": book.image_url} for book in books]
+    return [
+        {
+            "id": book.id,
+            "title": book.title,
+            "author": book.author,
+            "year": book.year,
+            "description": book.description,
+            "image_url": book.image_url
+        }
+        for book in books
+    ]
 
 @app.get("/books/{id}")
-def get_all_books_id(id: Optional[int] = None,
-                     title: Optional[str] = None,
-                     author: Optional[str] = None,
-                     year: Optional[int] = None):
-    books = json_to_dict_list(json.load())
-    filtered_books = []
-    for book in books:
-        if book["id"] == id:
-            filtered_books.append(book)
+async def get_book_by_id(
+    id: int,
+    title: Optional[str] = Query(None),
+    author: Optional[str] = Query(None),
+    year: Optional[int] = Query(None)
+):
+    session = SessionLocal()
+    book = session.query(Book).filter(Book.id == id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
 
-    if title:
-        filtered_books = [book for book in filtered_books if book['title'].lower() == title.lower()]
+    filtered_books = [book]
 
-    if year:
-        filtered_books = [book for book in filtered_books if book['year'] == year]
+    if title is not None:
+        filtered_books = [book for book in filtered_books if book.title.lower() == title.lower()]
 
-    return filtered_books
+    if author is not None:
+        filtered_books = [book for book in filtered_books if book.author.lower() == author.lower()]
+
+    if year is not None:
+        filtered_books = [book for book in filtered_books if book.year == year]
+
+    return [
+        {
+            "id": book.id,
+            "title": book.title,
+            "author": book.author,
+            "year": book.year,
+            "description": book.description,
+            "image_url": book.image_url
+        }
+        for book in filtered_books
+    ]
