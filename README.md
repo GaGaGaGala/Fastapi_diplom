@@ -6,15 +6,17 @@ python -m pip install -r requirements.txt
 
 ```
 ├── app
-│   └── # user
-│   ├── # routes.py
 │   └── main.py
+│
 ├── tests/
-│   ├── # users
 │   └── test.py
+│
 ├── load_books.json
 ├── utils.py
 ├── pyproject.toml или requirements.txt
 ├── .env
 └── .gitignore
 ```
+
+#### Автор: Галина Косачёва
+#### Дата: 07.08.2024
