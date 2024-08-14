@@ -5,9 +5,6 @@ from sqlalchemy.orm import sessionmaker
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 import json
-import requests
-from PIL import Image, UnidentifiedImageError
-from io import BytesIO
 
 app = FastAPI()
 
@@ -36,16 +33,6 @@ engine = create_engine('sqlite:///books.db')
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def optimize_image(image_url):
-    try:
-        response = requests.get(image_url)
-        image = Image.open(BytesIO(response.content))
-        # Optimize image here, e.g., resizing, compression, etc.
-        return image_url
-    except UnidentifiedImageError as e:
-        print(f"Error: Cannot identify image file at {image_url}. {e}")
-        return None
-
 @app.on_event("startup")
 async def load_books():
     with open('load_books.json', encoding='utf-8') as f:
@@ -54,7 +41,7 @@ async def load_books():
     session = SessionLocal()
     for book_data in books_data:
         book_id = book_data['id']
-        optimized_image_url = optimize_image(book_data['фотография'])
+
 
         existing_book = session.execute(select(Book).where(Book.id == book_id)).first()
         if not existing_book:
@@ -64,7 +51,7 @@ async def load_books():
                 author=book_data['автор'],
                 year=book_data['год публикации'],
                 description=book_data['описание'],
-                image_url=optimized_image_url
+                image_url=book_data["фотография"]
             )
             session.add(book)
     session.commit()
@@ -96,24 +83,32 @@ async def read_books():
     ]
 
 @app.get("/books/{id}")
-async def get_book_by_id(
-    id: int,
-    title: Optional[str] = Query(None),
-    author: Optional[str] = Query(None),
-    year: Optional[int] = Query(None)
-):
+async def get_book_by_id(id: int):
     session = SessionLocal()
     book = session.query(Book).filter(Book.id == id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
+    return {
+        "id": book.id,
+        "title": book.title,
+        "author": book.author,
+        "year": book.year,
+        "description": book.description,
+        "image_url": book.image_url
+    }
 
-    filtered_books = [book]
-
+@app.get("/search_book/")
+async def get_searched_book(title: str | None = None,
+                            author: str | None = None,
+                            year: int | None = None):
+    print(locals())
+    session = SessionLocal()
+    filtered_books = session.query(Book).all()
     if title is not None:
-        filtered_books = [book for book in filtered_books if book.title.lower() == title.lower()]
+        filtered_books = [book for book in filtered_books if title.lower() in book.title.lower()]
 
     if author is not None:
-        filtered_books = [book for book in filtered_books if book.author.lower() == author.lower()]
+        filtered_books = [book for book in filtered_books if author.lower() in book.title.lower()]
 
     if year is not None:
         filtered_books = [book for book in filtered_books if book.year == year]

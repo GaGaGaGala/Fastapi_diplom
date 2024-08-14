@@ -1,11 +1,8 @@
 python -m pip install -r requirements.txt
 
 ```
-[Flask] python app.py
 [FastAPI] python -m uvicorn app.main:app
-[Django] python manage.py runserver
-```
-
+...
 ```
 ├── app
 │   └── main.py
@@ -15,9 +12,8 @@ python -m pip install -r requirements.txt
 │
 ├── load_books.json
 ├── utils.py
-├── pyproject.toml или requirements.txt
-├── .env
-└── .gitignore
+├── requirements.txt
+
 ```
 
 #### Автор: Галина Косачёва
